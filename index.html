@@ -782,10 +782,10 @@
                     
                     const startFloorIndex = this.floors.findIndex(f => f.number === this.currentFloor);
                     const bottomFloorIndex = this.floors.findIndex(f => f.number === -2);
-                    const floorsToFall = bottomFloorIndex - startFloorIndex;
-                    const totalDistanceToFall = floorsToFall * this.floorHeight;
+                    const totalFloorsToFall = bottomFloorIndex - startFloorIndex;
                     
-                    let distanceFallen = 0;
+                    let currentFloorIndex = startFloorIndex;
+                    let distanceIntoCurrentFloor = 0;
                     
                     const fallInterval = setInterval(() => {
                         if (!this.isFalling || this.gameOver) {
@@ -794,26 +794,28 @@
                         }
                         
                         const deltaDistance = this.fallingSpeed * 0.016;
-                        distanceFallen += deltaDistance;
+                        distanceIntoCurrentFloor += deltaDistance;
                         this.buildingOffset -= deltaDistance;
                         
-                        const currentFloorIndex = Math.min(
-                            bottomFloorIndex,
-                            Math.floor(startFloorIndex + distanceFallen / this.floorHeight)
-                        );
-                        
-                        if (currentFloorIndex !== startFloorIndex) {
-                            this.currentFloor = this.floors[currentFloorIndex].number;
+                        if (distanceIntoCurrentFloor >= this.floorHeight) {
+                            distanceIntoCurrentFloor -= this.floorHeight;
+                            currentFloorIndex++;
+                            
+                            if (currentFloorIndex <= bottomFloorIndex) {
+                                this.currentFloor = this.floors[currentFloorIndex].number;
+                            }
                         }
                         
-                        if (distanceFallen >= totalDistanceToFall) {
+                        if (currentFloorIndex >= bottomFloorIndex && distanceIntoCurrentFloor >= 0) {
                             this.currentFloor = -2;
                             this.buildingOffset = 0;
                             clearInterval(fallInterval);
                             this.endGame(false);
                         }
                         
-                        const timeToBottom = (totalDistanceToFall - distanceFallen) / this.fallingSpeed;
+                        const remainingFloors = bottomFloorIndex - currentFloorIndex;
+                        const remainingDistance = remainingFloors * this.floorHeight - distanceIntoCurrentFloor;
+                        const timeToBottom = remainingDistance / this.fallingSpeed;
                         
                         if (timeToBottom <= 1 && timeToBottom > 0) {
                             if (this.playerOffElevator) {
