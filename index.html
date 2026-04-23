@@ -79,23 +79,31 @@
             display: flex;
             height: calc(100% - 60px);
             position: relative;
+            overflow: hidden;
+        }
+        
+        .building-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
         }
         
         .building {
-            flex: 1;
-            position: relative;
+            width: 100%;
+            position: absolute;
+            left: 0;
             background: linear-gradient(to bottom, #2c3e50, #1a252f);
+            transition: top 0.5s ease-in-out;
         }
         
         .floor {
-            position: absolute;
-            left: 0;
-            right: 0;
+            width: 100%;
             height: 50px;
             border-bottom: 2px solid #34495e;
             display: flex;
             align-items: center;
             padding-left: 20px;
+            position: relative;
         }
         
         .floor-number {
@@ -429,57 +437,59 @@
         
         <!-- 游戏区域 -->
         <div class="game-area">
-            <!-- 建筑 -->
-            <div class="building">
-                <!-- 楼层 -->
-                <div 
-                    v-for="floor in floors" 
-                    :key="floor.number"
-                    class="floor"
-                    :class="{ 'has-package': floor.hasPackage }"
-                    :style="{ top: floor.position + 'px' }"
-                >
-                    <span class="floor-number">{{ floor.number }}层</span>
-                    <div v-if="floor.hasPackage" class="package"></div>
-                </div>
-                
-                <!-- 电梯井 -->
-                <div class="elevator-shaft">
-                    <!-- 电梯 -->
+            <!-- 建筑容器 -->
+            <div class="building-container">
+                <!-- 建筑 -->
+                <div class="building" :style="{ top: buildingOffset + 'px', height: buildingHeight + 'px' }">
+                    <!-- 楼层 -->
                     <div 
-                        class="elevator"
-                        :class="{ 
-                            'doors-open': doorsOpen,
-                            'falling': isFalling
-                        }"
-                        :style="{ top: elevatorTop + 'px' }"
+                        v-for="floor in floors" 
+                        :key="floor.number"
+                        class="floor"
+                        :class="{ 'has-package': floor.hasPackage }"
                     >
-                        <div class="elevator-interior"></div>
-                        <div class="elevator-doors">
-                            <div class="door door-left">
-                                <div class="door-handle"></div>
-                            </div>
-                            <div class="door door-right">
-                                <div class="door-handle"></div>
-                            </div>
+                        <span class="floor-number">{{ floor.number }}层</span>
+                        <div v-if="floor.hasPackage" class="package"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 电梯井（固定在右侧） -->
+            <div class="elevator-shaft">
+                <!-- 电梯 -->
+                <div 
+                    class="elevator"
+                    :class="{ 
+                        'doors-open': doorsOpen,
+                        'falling': isFalling
+                    }"
+                    :style="{ top: elevatorDisplayTop + 'px' }"
+                >
+                    <div class="elevator-interior"></div>
+                    <div class="elevator-doors">
+                        <div class="door door-left">
+                            <div class="door-handle"></div>
                         </div>
-                        
-                        <!-- 玩家 -->
-                        <div 
-                            class="player"
-                            :class="{ jumping: isJumping }"
-                            :style="{ 
-                                left: playerLeft + 'px',
-                                top: playerTop + 'px'
-                            }"
-                        >
-                            <div class="player-body">
-                                <div class="player-head"></div>
-                                <div class="player-torso"></div>
-                                <div class="player-legs">
-                                    <div class="player-leg"></div>
-                                    <div class="player-leg"></div>
-                                </div>
+                        <div class="door door-right">
+                            <div class="door-handle"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 玩家 -->
+                    <div 
+                        class="player"
+                        :class="{ jumping: isJumping }"
+                        :style="{ 
+                            left: playerLeft + 'px',
+                            top: playerTop + 'px'
+                        }"
+                    >
+                        <div class="player-body">
+                            <div class="player-head"></div>
+                            <div class="player-torso"></div>
+                            <div class="player-legs">
+                                <div class="player-leg"></div>
+                                <div class="player-leg"></div>
                             </div>
                         </div>
                     </div>
@@ -522,7 +532,7 @@
                 load: 0,
                 elevatorTop: 0,
                 playerLeft: 35,
-                playerTop: 0,
+                playerTop: 5,
                 doorsOpen: false,
                 isMoving: false,
                 isFalling: false,
@@ -534,7 +544,9 @@
                 playerOffElevator: false,
                 keys: {},
                 gameLoop: null,
-                moveInterval: null
+                moveInterval: null,
+                packageTimer: null,
+                buildingOffset: 0
             },
             
             computed: {
@@ -552,6 +564,15 @@
                 
                 maxLoad() {
                     return 50;
+                },
+                
+                gameAreaHeight() {
+                    return 640;
+                },
+                
+                elevatorDisplayTop() {
+                    const currentFloorIndex = this.floors.findIndex(f => f.number === this.currentFloor);
+                    return this.buildingOffset + currentFloorIndex * this.floorHeight;
                 }
             },
             
@@ -562,6 +583,7 @@
             
             mounted() {
                 this.startGameLoop();
+                this.startPackageGeneration();
             },
             
             beforeDestroy() {
@@ -570,6 +592,9 @@
                 }
                 if (this.moveInterval) {
                     clearInterval(this.moveInterval);
+                }
+                if (this.packageTimer) {
+                    clearInterval(this.packageTimer);
                 }
             },
             
@@ -605,6 +630,26 @@
                     this.fallingSpeed = 0;
                     this.fallingStartTime = 0;
                     this.playerOffElevator = false;
+                    this.buildingOffset = 0;
+                    
+                    this.updateBuildingOffset();
+                },
+                
+                startPackageGeneration() {
+                    this.packageTimer = setInterval(() => {
+                        if (this.gameOver) return;
+                        this.generateNewPackage();
+                    }, 5000);
+                },
+                
+                generateNewPackage() {
+                    const emptyFloors = this.floors.filter(f => !f.hasPackage);
+                    if (emptyFloors.length === 0) return;
+                    
+                    const randomFloor = emptyFloors[Math.floor(Math.random() * emptyFloors.length)];
+                    if (randomFloor.number !== this.currentFloor) {
+                        randomFloor.hasPackage = true;
+                    }
                 },
                 
                 getFloorPosition(floorNum) {
@@ -656,6 +701,21 @@
                     }
                 },
                 
+                updateBuildingOffset() {
+                    const currentFloorIndex = this.floors.findIndex(f => f.number === this.currentFloor);
+                    const visibleFloors = Math.floor(this.gameAreaHeight / this.floorHeight);
+                    const halfVisible = Math.floor(visibleFloors / 2);
+                    
+                    let offset = -currentFloorIndex * this.floorHeight + (this.gameAreaHeight / 2 - this.floorHeight / 2);
+                    
+                    const maxOffset = 0;
+                    const minOffset = -(this.totalFloors - visibleFloors) * this.floorHeight;
+                    
+                    offset = Math.max(minOffset, Math.min(maxOffset, offset));
+                    
+                    this.buildingOffset = offset;
+                },
+                
                 moveElevator(direction) {
                     if (this.isMoving || this.doorsOpen) return;
                     
@@ -672,6 +732,8 @@
                     this.currentFloor = targetFloor;
                     this.elevatorTop = this.getFloorPosition(targetFloor);
                     this.isMoving = true;
+                    
+                    this.updateBuildingOffset();
                     
                     setTimeout(() => {
                         this.isMoving = false;
@@ -718,27 +780,45 @@
                     this.fallingStartTime = Date.now();
                     this.playerOffElevator = false;
                     
+                    const startFloorIndex = this.floors.findIndex(f => f.number === this.currentFloor);
+                    const bottomFloorIndex = this.floors.findIndex(f => f.number === -2);
+                    const floorsToFall = bottomFloorIndex - startFloorIndex;
+                    const totalDistanceToFall = floorsToFall * this.floorHeight;
+                    
+                    let distanceFallen = 0;
+                    
                     const fallInterval = setInterval(() => {
                         if (!this.isFalling || this.gameOver) {
                             clearInterval(fallInterval);
                             return;
                         }
                         
-                        this.elevatorTop += this.fallingSpeed * 0.016;
+                        const deltaDistance = this.fallingSpeed * 0.016;
+                        distanceFallen += deltaDistance;
+                        this.buildingOffset -= deltaDistance;
                         
-                        const bottomPosition = this.getFloorPosition(-2);
-                        if (this.elevatorTop >= bottomPosition) {
-                            this.elevatorTop = bottomPosition;
+                        const currentFloorIndex = Math.min(
+                            bottomFloorIndex,
+                            Math.floor(startFloorIndex + distanceFallen / this.floorHeight)
+                        );
+                        
+                        if (currentFloorIndex !== startFloorIndex) {
+                            this.currentFloor = this.floors[currentFloorIndex].number;
+                        }
+                        
+                        if (distanceFallen >= totalDistanceToFall) {
+                            this.currentFloor = -2;
+                            this.buildingOffset = 0;
                             clearInterval(fallInterval);
                             this.endGame(false);
                         }
                         
-                        const currentTime = Date.now();
-                        const timeToBottom = (bottomPosition - this.elevatorTop) / (this.fallingSpeed);
+                        const timeToBottom = (totalDistanceToFall - distanceFallen) / this.fallingSpeed;
                         
                         if (timeToBottom <= 1 && timeToBottom > 0) {
                             if (this.playerOffElevator) {
                                 this.isFalling = false;
+                                clearInterval(fallInterval);
                                 this.endGame(true);
                             }
                         }
