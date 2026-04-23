@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电梯送货小游戏</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            width: 900px;
+            height: 700px;
+            background: #1a1a2e;
+            border-radius: 15px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .status-bar {
+            height: 60px;
+            background: #16213e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            border-bottom: 3px solid #0f3460;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            font-size: 18px;
+        }
+        
+        .status-label {
+            color: #e94560;
+            font-weight: bold;
+        }
+        
+        .status-value {
+            background: #0f3460;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .status-value.danger {
+            color: #ff4444;
+            animation: pulse 0.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .game-area {
+            display: flex;
+            height: calc(100% - 60px);
+            position: relative;
+        }
+        
+        .building {
+            flex: 1;
+            position: relative;
+            background: linear-gradient(to bottom, #2c3e50, #1a252f);
+        }
+        
+        .floor {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 50px;
+            border-bottom: 2px solid #34495e;
+            display: flex;
+            align-items: center;
+            padding-left: 20px;
+        }
+        
+        .floor-number {
+            color: #7f8c8d;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .floor.has-package .floor-number {
+            color: #f1c40f;
+        }
+        
+        .package {
+            position: absolute;
+            right: 150px;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #e67e22, #d35400);
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+            animation: float 2s ease-in-out infinite;
+        }
+        
+        .package::before {
+            content: '📦';
+            font-size: 24px;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        .elevator-shaft {
+            width: 120px;
+            background: #0f1923;
+            position: absolute;
+            right: 20px;
+            top: 0;
+            bottom: 0;
+            border-left: 3px solid #1a252f;
+            border-right: 3px solid #1a252f;
+        }
+        
+        .elevator {
+            position: absolute;
+            width: 100px;
+            height: 50px;
+            left: 10px;
+            background: linear-gradient(to bottom, #3498db, #2980b9);
+            border-radius: 5px;
+            box-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
+            transition: top 0.5s ease-in-out;
+            overflow: hidden;
+        }
+        
+        .elevator.falling {
+            transition: top 0.05s linear;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+            background: linear-gradient(to bottom, #e74c3c, #c0392b);
+        }
+        
+        .elevator-doors {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            z-index: 10;
+        }
+        
+        .door {
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to bottom, #95a5a6, #7f8c8d);
+            transition: transform 1s ease-in-out;
+            position: relative;
+        }
+        
+        .door-left {
+            transform-origin: left;
+        }
+        
+        .door-right {
+            transform-origin: right;
+        }
+        
+        .elevator.doors-open .door-left {
+            transform: scaleX(0);
+        }
+        
+        .elevator.doors-open .door-right {
+            transform: scaleX(0);
+        }
+        
+        .door-handle {
+            position: absolute;
+            top: 50%;
+            width: 6px;
+            height: 15px;
+            background: #2c3e50;
+            transform: translateY(-50%);
+            border-radius: 3px;
+        }
+        
+        .door-left .door-handle {
+            right: 5px;
+        }
+        
+        .door-right .door-handle {
+            left: 5px;
+        }
+        
+        .elevator-interior {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            right: 5px;
+            bottom: 5px;
+            background: linear-gradient(to bottom, #ecf0f1, #bdc3c7);
+            border-radius: 3px;
+        }
+        
+        .player {
+            position: absolute;
+            width: 30px;
+            height: 45px;
+            z-index: 20;
+            transition: none;
+        }
+        
+        .player-body {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .player-head {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            border-radius: 50%;
+        }
+        
+        .player-head::after {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 5px;
+            width: 4px;
+            height: 4px;
+            background: #2c3e50;
+            border-radius: 50%;
+        }
+        
+        .player-head::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            right: 5px;
+            width: 4px;
+            height: 4px;
+            background: #2c3e50;
+            border-radius: 50%;
+        }
+        
+        .player-torso {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 18px;
+            height: 18px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            border-radius: 3px;
+        }
+        
+        .player-legs {
+            position: absolute;
+            top: 34px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 2px;
+        }
+        
+        .player-leg {
+            width: 6px;
+            height: 11px;
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            border-radius: 0 0 2px 2px;
+        }
+        
+        .player.jumping .player-legs {
+            animation: jump-legs 0.5s ease-out;
+        }
+        
+        .player.jumping .player-head,
+        .player.jumping .player-torso {
+            animation: jump-body 0.5s ease-out;
+        }
+        
+        @keyframes jump-legs {
+            0% { transform: translateX(-50%) translateY(0); }
+            30% { transform: translateX(-50%) translateY(-10px); }
+            100% { transform: translateX(-50%) translateY(0); }
+        }
+        
+        @keyframes jump-body {
+            0% { transform: translateX(-50%) translateY(0); }
+            30% { transform: translateX(-50%) translateY(-15px); }
+            100% { transform: translateX(-50%) translateY(0); }
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        .game-over h1 {
+            font-size: 60px;
+            color: #e74c3c;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(231, 76, 60, 0.8);
+        }
+        
+        .game-over h1.win {
+            color: #2ecc71;
+            text-shadow: 0 0 20px rgba(46, 204, 113, 0.8);
+        }
+        
+        .game-over p {
+            font-size: 24px;
+            color: #fff;
+            margin-bottom: 30px;
+        }
+        
+        .restart-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .restart-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .controls-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 20px;
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+        
+        .warning {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: #fff;
+            padding: 10px 30px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 50;
+            animation: shake 0.5s infinite;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-50%) rotate(-2deg); }
+            75% { transform: translateX(-50%) rotate(2deg); }
+        }
+        
+        .falling-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+            color: rgba(255, 68, 68, 0.3);
+            z-index: 40;
+            pointer-events: none;
+            animation: pulse-fast 0.3s infinite;
+        }
+        
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="game-container">
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">当前楼层</span>
+                <span class="status-value">{{ currentFloor }}</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">电梯载重</span>
+                <span class="status-value" :class="{ danger: load > 50 }">{{ load }}</span>
+            </div>
+        </div>
+        
+        <!-- 游戏区域 -->
+        <div class="game-area">
+            <!-- 建筑 -->
+            <div class="building">
+                <!-- 楼层 -->
+                <div 
+                    v-for="floor in floors" 
+                    :key="floor.number"
+                    class="floor"
+                    :class="{ 'has-package': floor.hasPackage }"
+                    :style="{ top: floor.position + 'px' }"
+                >
+                    <span class="floor-number">{{ floor.number }}层</span>
+                    <div v-if="floor.hasPackage" class="package"></div>
+                </div>
+                
+                <!-- 电梯井 -->
+                <div class="elevator-shaft">
+                    <!-- 电梯 -->
+                    <div 
+                        class="elevator"
+                        :class="{ 
+                            'doors-open': doorsOpen,
+                            'falling': isFalling
+                        }"
+                        :style="{ top: elevatorTop + 'px' }"
+                    >
+                        <div class="elevator-interior"></div>
+                        <div class="elevator-doors">
+                            <div class="door door-left">
+                                <div class="door-handle"></div>
+                            </div>
+                            <div class="door door-right">
+                                <div class="door-handle"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 玩家 -->
+                        <div 
+                            class="player"
+                            :class="{ jumping: isJumping }"
+                            :style="{ 
+                                left: playerLeft + 'px',
+                                top: playerTop + 'px'
+                            }"
+                        >
+                            <div class="player-body">
+                                <div class="player-head"></div>
+                                <div class="player-torso"></div>
+                                <div class="player-legs">
+                                    <div class="player-leg"></div>
+                                    <div class="player-leg"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 失控警告 -->
+            <div v-if="isFalling" class="warning">
+                ⚠️ 电梯失控！按空格键跳跃逃生！
+            </div>
+            
+            <!-- 下坠指示器 -->
+            <div v-if="isFalling" class="falling-indicator">⬇️</div>
+            
+            <!-- 游戏结束 -->
+            <div v-if="gameOver" class="game-over">
+                <h1 :class="{ win: playerSurvived }">
+                    {{ playerSurvived ? '🎉 恭喜逃生！' : '💀 游戏结束' }}
+                </h1>
+                <p>
+                    {{ playerSurvived ? '你成功在坠楼前跳离了电梯！' : '你没能及时逃生...' }}
+                </p>
+                <p>最终载重: {{ load }}</p>
+                <button class="restart-btn" @click="restartGame">重新开始</button>
+            </div>
+            
+            <!-- 操作提示 -->
+            <div class="controls-hint">
+                操作：↑ 电梯上升 | ↓ 电梯下降 | ← → 角色移动 | 空格 跳跃
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                floors: [],
+                currentFloor: 1,
+                load: 0,
+                elevatorTop: 0,
+                playerLeft: 35,
+                playerTop: 0,
+                doorsOpen: false,
+                isMoving: false,
+                isFalling: false,
+                isJumping: false,
+                gameOver: false,
+                playerSurvived: false,
+                fallingSpeed: 0,
+                fallingStartTime: 0,
+                playerOffElevator: false,
+                keys: {},
+                gameLoop: null,
+                moveInterval: null
+            },
+            
+            computed: {
+                totalFloors() {
+                    return 18;
+                },
+                
+                floorHeight() {
+                    return 50;
+                },
+                
+                buildingHeight() {
+                    return this.totalFloors * this.floorHeight;
+                },
+                
+                maxLoad() {
+                    return 50;
+                }
+            },
+            
+            created() {
+                this.initGame();
+                this.bindKeys();
+            },
+            
+            mounted() {
+                this.startGameLoop();
+            },
+            
+            beforeDestroy() {
+                if (this.gameLoop) {
+                    cancelAnimationFrame(this.gameLoop);
+                }
+                if (this.moveInterval) {
+                    clearInterval(this.moveInterval);
+                }
+            },
+            
+            methods: {
+                initGame() {
+                    this.floors = [];
+                    const floorNumbers = [];
+                    
+                    for (let i = -2; i <= 15; i++) {
+                        floorNumbers.push(i);
+                    }
+                    
+                    floorNumbers.reverse().forEach((num, index) => {
+                        const hasPackage = Math.random() > 0.6;
+                        this.floors.push({
+                            number: num,
+                            position: index * this.floorHeight,
+                            hasPackage: hasPackage
+                        });
+                    });
+                    
+                    this.currentFloor = 1;
+                    this.load = 0;
+                    this.elevatorTop = this.getFloorPosition(1);
+                    this.playerLeft = 35;
+                    this.playerTop = 5;
+                    this.doorsOpen = false;
+                    this.isMoving = false;
+                    this.isFalling = false;
+                    this.isJumping = false;
+                    this.gameOver = false;
+                    this.playerSurvived = false;
+                    this.fallingSpeed = 0;
+                    this.fallingStartTime = 0;
+                    this.playerOffElevator = false;
+                },
+                
+                getFloorPosition(floorNum) {
+                    const floor = this.floors.find(f => f.number === floorNum);
+                    return floor ? floor.position : 0;
+                },
+                
+                bindKeys() {
+                    document.addEventListener('keydown', (e) => {
+                        this.keys[e.code] = true;
+                        
+                        if (e.code === 'ArrowUp' && !this.isFalling && !this.isMoving) {
+                            this.moveElevator('up');
+                        }
+                        if (e.code === 'ArrowDown' && !this.isFalling && !this.isMoving) {
+                            this.moveElevator('down');
+                        }
+                        if (e.code === 'Space') {
+                            this.playerJump();
+                            e.preventDefault();
+                        }
+                    });
+                    
+                    document.addEventListener('keyup', (e) => {
+                        this.keys[e.code] = false;
+                    });
+                },
+                
+                startGameLoop() {
+                    const loop = () => {
+                        this.updatePlayerPosition();
+                        this.gameLoop = requestAnimationFrame(loop);
+                    };
+                    loop();
+                },
+                
+                updatePlayerPosition() {
+                    if (this.gameOver) return;
+                    
+                    if (this.keys['ArrowLeft']) {
+                        this.playerLeft = Math.max(0, this.playerLeft - 3);
+                    }
+                    if (this.keys['ArrowRight']) {
+                        this.playerLeft = Math.min(70, this.playerLeft + 3);
+                    }
+                    
+                    if (this.isFalling) {
+                        this.checkPlayerPosition();
+                    }
+                },
+                
+                moveElevator(direction) {
+                    if (this.isMoving || this.doorsOpen) return;
+                    
+                    let targetFloor = this.currentFloor;
+                    
+                    if (direction === 'up') {
+                        if (this.currentFloor >= 15) return;
+                        targetFloor = this.currentFloor + 1;
+                    } else {
+                        if (this.currentFloor <= -2) return;
+                        targetFloor = this.currentFloor - 1;
+                    }
+                    
+                    this.currentFloor = targetFloor;
+                    this.elevatorTop = this.getFloorPosition(targetFloor);
+                    this.isMoving = true;
+                    
+                    setTimeout(() => {
+                        this.isMoving = false;
+                        this.checkForPackage();
+                    }, 600);
+                },
+                
+                checkForPackage() {
+                    const floor = this.floors.find(f => f.number === this.currentFloor);
+                    if (floor && floor.hasPackage) {
+                        this.openDoors();
+                        setTimeout(() => {
+                            this.collectPackage(floor);
+                        }, 1200);
+                    }
+                },
+                
+                openDoors() {
+                    this.doorsOpen = true;
+                },
+                
+                closeDoors() {
+                    this.doorsOpen = false;
+                },
+                
+                collectPackage(floor) {
+                    floor.hasPackage = false;
+                    this.load += 10;
+                    
+                    setTimeout(() => {
+                        this.closeDoors();
+                        
+                        if (this.load > this.maxLoad) {
+                            setTimeout(() => {
+                                this.startFalling();
+                            }, 500);
+                        }
+                    }, 500);
+                },
+                
+                startFalling() {
+                    this.isFalling = true;
+                    this.fallingSpeed = 100;
+                    this.fallingStartTime = Date.now();
+                    this.playerOffElevator = false;
+                    
+                    const fallInterval = setInterval(() => {
+                        if (!this.isFalling || this.gameOver) {
+                            clearInterval(fallInterval);
+                            return;
+                        }
+                        
+                        this.elevatorTop += this.fallingSpeed * 0.016;
+                        
+                        const bottomPosition = this.getFloorPosition(-2);
+                        if (this.elevatorTop >= bottomPosition) {
+                            this.elevatorTop = bottomPosition;
+                            clearInterval(fallInterval);
+                            this.endGame(false);
+                        }
+                        
+                        const currentTime = Date.now();
+                        const timeToBottom = (bottomPosition - this.elevatorTop) / (this.fallingSpeed);
+                        
+                        if (timeToBottom <= 1 && timeToBottom > 0) {
+                            if (this.playerOffElevator) {
+                                this.isFalling = false;
+                                this.endGame(true);
+                            }
+                        }
+                    }, 16);
+                },
+                
+                playerJump() {
+                    if (this.isJumping || this.gameOver) return;
+                    
+                    this.isJumping = true;
+                    
+                    if (this.isFalling) {
+                        this.playerOffElevator = true;
+                    }
+                    
+                    setTimeout(() => {
+                        this.isJumping = false;
+                    }, 500);
+                },
+                
+                checkPlayerPosition() {
+                    if (this.playerOffElevator) {
+                        this.playerTop = Math.min(this.playerTop + 0.5, 5);
+                    }
+                },
+                
+                endGame(survived) {
+                    this.isFalling = false;
+                    this.gameOver = true;
+                    this.playerSurvived = survived;
+                },
+                
+                restartGame() {
+                    this.initGame();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
